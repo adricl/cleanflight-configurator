@@ -35,6 +35,17 @@ TABS.motors.initialize = function (callback) {
             SENSOR_DATA.accelerometer[i] = 0;
         }
     }
+    function initMagImpact() {
+        var motor_base = Array(3);
+        var motor_impact_scaled = Array(3);
+        var motor_compensation = Array(3);
+
+        for (var i = 0; i < 3; i++) {
+            motor_base[i] = 0;
+            motor_impact_scaled[i] = 0;
+            motor_compensation[i] = 0;
+        }
+    }
 
     function initDataArray(length) {
         var data = new Array(length);
@@ -163,6 +174,8 @@ TABS.motors.initialize = function (callback) {
         // Always start with default/empty sensor data array, clean slate all
         initSensorData();
 
+        initMagImpact();
+
         // Setup variables
         var samples_accel_i = 0,
             accel_data = initDataArray(3),
@@ -219,31 +232,31 @@ TABS.motors.initialize = function (callback) {
             }, rate, true);
 
             function update_accel_graph() {
-                if (!accel_offset_established) {
+/*                if (!accel_offset_established) {
                     for (var i = 0; i < 3; i++) {
-                        accel_offset[i] = SENSOR_DATA.accelerometer[i] * -1;
+                        accel_offset[i] = SENSOR_DATA.magnetometer[i] * -1;
                     }
 
                     accel_offset_established = true;
                 }
 
                 var accel_with_offset = [
-                    accel_offset[0] + SENSOR_DATA.accelerometer[0],
-                    accel_offset[1] + SENSOR_DATA.accelerometer[1],
-                    accel_offset[2] + SENSOR_DATA.accelerometer[2]
-                ];
-
+                    accel_offset[0] + SENSOR_DATA.magnetometer[0],
+                    accel_offset[1] + SENSOR_DATA.magnetometer[1],
+                    accel_offset[2] + SENSOR_DATA.magnetometer[2]
+                ];*/
+                // Add motor rate to develop graph
                 updateGraphHelperSize(accelHelpers);
-                samples_accel_i = addSampleToData(accel_data, samples_accel_i, accel_with_offset);
+                
+                samples_accel_i = addSampleToData(accel_data, samples_accel_i, SENSOR_DATA.magnetometer);
                 drawGraph(accelHelpers, accel_data, samples_accel_i);
+                raw_data_text_ements.x[0].text(SENSOR_DATA.magnetometer[0].toFixed(2));
+                raw_data_text_ements.y[0].text(SENSOR_DATA.magnetometer[1].toFixed(2));
+                raw_data_text_ements.z[0].text(SENSOR_DATA.magnetometer[2].toFixed(2));
 
-                raw_data_text_ements.x[0].text(accel_with_offset[0].toFixed(2) + ' (' + accel_max_read[0].toFixed(2) + ')');
-                raw_data_text_ements.y[0].text(accel_with_offset[1].toFixed(2) + ' (' + accel_max_read[1].toFixed(2) + ')');
-                raw_data_text_ements.z[0].text(accel_with_offset[2].toFixed(2) + ' (' + accel_max_read[2].toFixed(2) + ')');
 
-                for (var i = 0; i < 3; i++) {
-                    if (Math.abs(accel_with_offset[i]) > Math.abs(accel_max_read[i])) accel_max_read[i] = accel_with_offset[i];
-                }
+                //samples_accel_i = addSampleToData(accel_data, samples_accel_i, accel_with_offset);
+                //drawGraph(accelHelpers, accel_data, samples_accel_i);
             }
         });
 
@@ -389,6 +402,20 @@ TABS.motors.initialize = function (callback) {
 
         $('#motorsEnableTestMode').change();
         
+        function set_base_state(){
+            for (var i = 0; i < 3; i++) {
+                motor_base[i] = SENSOR_DATA.magnetometer[i];
+                //motor_impact_scaled[i] = 0;
+                //motor_compensation[i] = 0;
+            }
+        }
+        
+        function set_scaled_mag_state(){
+            for (var i = 0; i < 3; i++) {
+                //motor_impact_scaled[i] = 0;
+                //motor_compensation[i] = 0;
+            }
+        }
         // data pulling functions used inside interval timer
         
         function get_status() {
