@@ -35,17 +35,6 @@ TABS.motors.initialize = function (callback) {
             SENSOR_DATA.accelerometer[i] = 0;
         }
     }
-    function initMagImpact() {
-        var motor_base = Array(3);
-        var motor_impact_scaled = Array(3);
-        var motor_compensation = Array(3);
-
-        for (var i = 0; i < 3; i++) {
-            motor_base[i] = 0;
-            motor_impact_scaled[i] = 0;
-            motor_compensation[i] = 0;
-        }
-    }
 
     function initDataArray(length) {
         var data = new Array(length);
@@ -174,15 +163,17 @@ TABS.motors.initialize = function (callback) {
         // Always start with default/empty sensor data array, clean slate all
         initSensorData();
 
-        initMagImpact();
-
         // Setup variables
         var samples_accel_i = 0,
             accel_data = initDataArray(3),
+            motor_base = [0, 0, 0],
+            motor_impact_scaled = [0, 0, 0],
+            motor_compensation = [0, 0, 0],
             accelHelpers = initGraphHelpers('#accel', samples_accel_i, [-2, 2]),
             accel_max_read = [0, 0, 0],
             accel_offset = [0, 0, 0],
-            accel_offset_established = false;
+            accel_offset_established = false,
+            master_value_scaled = 0;
 
         var raw_data_text_ements = {
             x: [],
@@ -328,27 +319,52 @@ TABS.motors.initialize = function (callback) {
                     buffer = buffering_set_motor.pop();
 
                     MSP.send_message(MSP_codes.MSP_SET_MOTOR, buffer);
-
+		    
+		    //check mag values 
+			
                     buffering_set_motor = [];
                     buffer_delay = false;
+
+                    var mag_read_delay = setTimeout(function () {
+                        throttle_mag_calc();
+                    }, 10);
+
                 }, 10);
             }
         });
 
         $('div.sliders input.master').on('input', function () {
             var val = $(this).val();
-
+		
             $('div.sliders input:not(:disabled, :last)').val(val);
             $('div.values li:not(:last)').slice(0, number_of_valid_outputs).text(val);
             $('div.sliders input:not(:last):first').trigger('input');
+            throttle_impact(val);
         });
 
+        function throttle_impact (val) {
+            if (val >= MISC.mincommand){
+                master_value_scaled = ((val - MISC.mincommand)/(MISC.maxthrottle - MISC.mincommand)) * 100; 
+            }
+        }
+
+        function throttle_mag_calc (){
+            if (master_value_scaled){
+                for(var i=0; i < 3; i++){
+                    var mag_val = SENSOR_DATA.magnetometer[i];
+                    motor_impact_scaled[i] = (mag_val - motor_base[i]) / master_value_scaled;
+                    //motor_compensation[i] = motor_compensation[i] * .99 - motor_impact_scaled[i] * .01;
+                    console.log( i + ", " + master_value_scaled + ", " + mag_val + ", " + motor_impact_scaled[i]);
+                }
+            }
+        }
         $('#motorsEnableTestMode').change(function () {
             if ($(this).is(':checked')) {
                 $('div.sliders input').slice(0, number_of_valid_outputs).prop('disabled', false);
 
                 // unlock master slider
                 $('div.sliders input:last').prop('disabled', false);
+                //step_motor();
             } else {
                 // disable sliders / min max
                 $('div.sliders input').prop('disabled', true);
@@ -358,6 +374,7 @@ TABS.motors.initialize = function (callback) {
 
                 // trigger change event so values are sent to mcu
                 $('div.sliders input').trigger('input');
+                set_base_state();
             }
         });
 
@@ -402,11 +419,25 @@ TABS.motors.initialize = function (callback) {
 
         $('#motorsEnableTestMode').change();
         
+        function step_motor() {
+            var i = 0, howManyTimes = 20;
+            function f() {
+                i++;
+                var num = 1000 + i*50
+                $('div.sliders input.master').val(num); 
+                $('div.sliders input.master').trigger('input');
+                console.log("sadas " + num);
+                if( i < howManyTimes ){
+                    setTimeout( f, 3000 );
+                }
+            };
+            f();
+        }
+
         function set_base_state(){
             for (var i = 0; i < 3; i++) {
                 motor_base[i] = SENSOR_DATA.magnetometer[i];
-                //motor_impact_scaled[i] = 0;
-                //motor_compensation[i] = 0;
+                console.log(i + ", " + motor_base[i] + ", base");
             }
         }
         
@@ -443,6 +474,7 @@ TABS.motors.initialize = function (callback) {
                 $('#motorsEnableTestMode').prop('checked', false);
             } else {
                 $('#motorsEnableTestMode').prop('disabled', false);
+
             }
 
             if (previousArmState != self.armed) {
